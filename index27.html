@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://sigagis.conagua.gob.mx/t_estudios24/img/favicon.ico" rel="shortcut icon">
+    <title>BiVAS - Biblioteca Virtual de Aguas Subterráneas</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        /* --- LOADER --- */
+        #loader-container {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 9999;
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 5px solid #f3f3f3; border-top: 5px solid #003366;
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- PAGINACIÓN ILUMINADA --- */
+        .pagination {
+            display: flex; justify-content: center; gap: 5px;
+            margin: 25px 0; flex-wrap: wrap;
+        }
+        .pagination button {
+            padding: 8px 14px; border: 1px solid #611232;
+            background-color: white; color: #611232;
+            cursor: pointer; border-radius: 4px; font-weight: bold;
+        }
+        .pagination button.active {
+            background-color: #611232 !important; color: white !important;
+            transform: scale(1.1); box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        /* --- BARRA DE RESULTADOS (GRIS) --- */
+        .results-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            background-color: #f4f4f4; padding: 12px 20px;
+            border-radius: 4px; border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .btn-export {
+            background-color: #1D6F42; color: white; border: none;
+            padding: 8px 15px; border-radius: 4px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; font-weight: bold;
+        }
+
+        /* --- ICONOS DESACTIVADOS --- */
+        .icon-disabled {
+            color: #ccc !important; 
+            cursor: help; /* Cambia el cursor a un signo de interrogación o flecha de ayuda */
+            /* Quitamos pointer-events: none para que el 'title' funcione */
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        /* --- SECCIÓN DE CONTACTO FINAL (INDEPENDIENTE) --- */
+        .final-contact-section {
+            width: 100%;
+            margin-top: 50px; /* Espacio extra para separarlo de todo */
+            padding: 30px 0;
+            border-top: 1px solid #ccc;
+            background-color: #fff;
+            text-align: center;
+        }
+        .contact-content {
+            max-width: 900px;
+            margin: 0 auto;
+            color: #333;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .contact-content a {
+            color: #611232;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .contact-content a:hover { text-decoration: underline; }
+
+        #tabla-resultados td { white-space: pre-line; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+    <div id="loader-container">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; font-weight: bold; color: #003366;">Cargando Biblioteca...</p>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>Gerencia de Aguas Subterráneas | SIGA</h1>
+                    <h2>Biblioteca Virtual de Aguas Subterráneas (BiVAS)</h2>
+                </div>
+                <div class="header-logo">
+                    <img src="https://sigagis.conagua.gob.mx/t_estudios24/images/Logo_CONAGUA_W_I.png" alt="Logo CONAGUA">
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Buscar por ID del Estudio:</label>
+                    <input type="number" id="filtro-id" placeholder="Ej: 488">
+                </div>
+                <div class="filter-group">
+                    <label>1. Selecciona un Estado:</label>
+                    <select id="filtro-estado"><option value="">-- Todos --</option></select>
+                </div>
+                <div class="filter-group">
+                    <label>2. Selecciona un Acuífero:</label>
+                    <select id="filtro-acuifero"><option value="">-- Todos --</option></select>
+                </div>
+                <div class="filter-group" style="grid-column: 1 / -1;">
+                    <label>3. Búsqueda por palabras:</label>
+                    <input type="text" id="filtro-texto" placeholder="Buscar palabras clave en el título...">
+                </div>
+                <div class="filter-group-right">
+                    <button id="btn-limpiar-filtros" class="clear-filters">4. Limpiar Selecciones/Filtros</button>
+                </div>
+            </div>
+
+            <div class="results-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>NÚMERO</th>
+                            <th>TÍTULO</th>
+                            <th>ESTADOS</th>
+                            <th>AÑO</th>
+                            <th>CARÁTULA</th>
+                            <th>PDF</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-resultados"></tbody>
+                </table>
+            </div>
+
+            <div class="pagination"></div>
+
+            <div class="results-bar">
+                <div class="results-info">
+                    <span id="contador-resultados" style="font-weight: 600;">Calculando...</span>
+                </div>
+                <button id="btn-exportar" class="btn-export">
+                    <i class="fa-solid fa-file-excel"></i> Exportar a CSV (Excel)
+                </button>
+            </div>
+        </main>
+    </div> <div class="final-contact-section">
+        <div class="contact-content">
+            <p>
+                Para mayor información relacionada con los documentos de los Acervos mostrados, favor de enviar un mensaje de correo electrónico a 
+                <a href="mailto:biblioteca_sgt_gas@conagua.gob.mx">biblioteca_sgt_gas@conagua.gob.mx</a>, y con gusto le atenderemos.
+            </p>
+        </div>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const loader = document.getElementById('loader-container');
+        const filtroId = document.getElementById('filtro-id');
+        const filtroEstado = document.getElementById('filtro-estado');
+        const filtroAcuifero = document.getElementById('filtro-acuifero');
+        const filtroTexto = document.getElementById('filtro-texto');
+        const tablaResultados = document.getElementById('tabla-resultados');
+        const paginationContainer = document.querySelector('.pagination');
+        const contadorResultados = document.getElementById('contador-resultados');
+
+        let estudiosData = [];
+        let acuiferosData = [];
+        let estudiosFiltrados = [];
+        let currentPage = 1;
+        const studiesPerPage = 20;
+
+        const cargarDatos = async () => {
+            try {
+                const [resEst, resAcu] = await Promise.all([
+                    fetch('T_ESTUDIOS_1.csv'),
+                    fetch('T_ACUIFEROS_ESTADOS_1.csv')
+                ]);
+                estudiosData = parseCSVRobust(await resEst.text());
+                acuiferosData = parseCSVRobust(await resAcu.text());
+                poblarEstados();
+                aplicarFiltrosYRenderizar();
+            } catch (e) { console.error(e); }
+            finally { loader.style.display = 'none'; }
+        };
+
+        const parseCSVRobust = (text) => {
+            const rows = [];
+            let row = [], field = '', inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i], next = text[i+1];
+                if (char === '"' && inQuotes && next === '"') { field += '"'; i++; }
+                else if (char === '"') inQuotes = !inQuotes;
+                else if (char === ',' && !inQuotes) { row.push(field); field = ''; }
+                else if ((char === '\r' || char === '\n') && !inQuotes) {
+                    if (field !== '' || row.length > 0) { row.push(field); rows.push(row); field = ''; row = []; }
+                    if (char === '\r' && next === '\n') i++;
+                } else field += char;
+            }
+            if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
+            const headers = rows[0].map(h => h.trim());
+            return rows.slice(1).map(r => {
+                const obj = {};
+                headers.forEach((h, i) => obj[h] = (r[i] || "").trim());
+                obj.NORMALIZED_ID = (obj['ID_ESTUDIO'] || r[0] || "").trim();
+                return obj;
+            });
+        };
+
+        const poblarEstados = () => {
+            const estados = [...new Set(acuiferosData.map(a => a.ESTADO))].filter(Boolean).sort();
+            estados.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e; opt.textContent = e;
+                filtroEstado.appendChild(opt);
+            });
+        };
+
+        const aplicarFiltrosYRenderizar = () => {
+            currentPage = 1;
+            const idV = filtroId.value.trim();
+            const edoV = filtroEstado.value;
+            const acuV = filtroAcuifero.value;
+            const txtV = filtroTexto.value.toLowerCase().trim();
+
+            let filtrados = estudiosData;
+            if (idV) filtrados = filtrados.filter(e => e.NORMALIZED_ID === idV);
+            if (edoV || acuV) {
+                const idsValidos = new Set(acuiferosData
+                    .filter(a => (edoV ? a.ESTADO === edoV : true) && (acuV ? a.ACUIFERO === acuV : true))
+                    .map(a => a.NORMALIZED_ID));
+                filtrados = filtrados.filter(e => idsValidos.has(e.NORMALIZED_ID));
+            }
+            if (txtV) filtrados = filtrados.filter(e => (e.TITULO_BUSQUEDA + e.TITULO_ORIGINAL).toLowerCase().includes(txtV));
+
+            estudiosFiltrados = filtrados;
+            contadorResultados.textContent = `${estudiosFiltrados.length} estudios encontrados.`;
+            renderizarTabla();
+            renderizarPaginacion();
+        };
+
+      const renderizarTabla = () => {
+            tablaResultados.innerHTML = '';
+            const inicio = (currentPage - 1) * studiesPerPage;
+            const pagina = estudiosFiltrados.slice(inicio, inicio + studiesPerPage);
+
+            pagina.forEach(e => {
+                const edos = [...new Set(acuiferosData.filter(a => a.NORMALIZED_ID === e.NORMALIZED_ID).map(a => a.ESTADO))].sort().join(', ');
+                
+                // Validación estricta de URLs
+                const hasCaratula = e.CARATULA && e.CARATULA.trim() !== "" && e.CARATULA !== "#";
+                const hasPDF = e.PDF && e.PDF.trim() !== "" && e.PDF !== "#";
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${e.NORMALIZED_ID}</td>
+                    <td style="text-align:left;">${e.TITULO_ORIGINAL || e.TITULO_BUSQUEDA}</td>
+                    <td>${edos}</td>
+                    <td>${e.AÑO || e.ANIO || ''}</td>
+                    <td style="text-align:center;">
+                        ${hasCaratula 
+                            ? `<a href="${e.CARATULA}" target="_blank" title="Ver Carátula"><i class="fa-regular fa-image"></i></a>` 
+                            : `<i class="fa-regular fa-image icon-disabled" title="Carátula no disponible"></i>`}
+                    </td>
+                    <td style="text-align:center;">
+                        ${hasPDF 
+                            ? `<a href="${e.PDF}" target="_blank" title="Abrir PDF"><i class="fa-regular fa-file-pdf"></i></a>` 
+                            : `<i class="fa-regular fa-file-pdf icon-disabled" title="Documento PDF no disponible"></i>`}
+                    </td>
+                `;
+                tablaResultados.appendChild(row);
+            });
+        };
+
+        const renderizarPaginacion = () => {
+        paginationContainer.innerHTML = '';
+        const total = Math.ceil(estudiosFiltrados.length / studiesPerPage);
+        if (total <= 1) return;
+
+        // --- BOTÓN PRIMERO ---
+        const btnFirst = document.createElement('button');
+        btnFirst.innerHTML = '<i class="fa-solid fa-angles-left"></i> Primero';
+        btnFirst.disabled = (currentPage === 1);
+        btnFirst.onclick = () => { currentPage = 1; actualizarVista(); };
+        paginationContainer.appendChild(btnFirst);
+
+        // --- BOTÓN ANTERIOR ---
+        const btnPrev = document.createElement('button');
+        btnPrev.innerHTML = '<i class="fa-solid fa-angle-left"></i> Anterior';
+        btnPrev.disabled = (currentPage === 1);
+        btnPrev.onclick = () => { currentPage--; actualizarVista(); };
+        paginationContainer.appendChild(btnPrev);
+
+        // --- NÚMEROS DE PÁGINA (Bloque dinámico) ---
+        let start = Math.max(1, currentPage - 2);
+        let end = Math.min(total, start + 4);
+        if (end === total) start = Math.max(1, end - 4);
+
+        for (let i = start; i <= end; i++) {
+            const b = document.createElement('button');
+            b.textContent = i;
+            if (i === currentPage) b.classList.add('active');
+            b.onclick = () => { currentPage = i; actualizarVista(); };
+            paginationContainer.appendChild(b);
+        }
+
+        // --- BOTÓN SIGUIENTE ---
+        const btnNext = document.createElement('button');
+        btnNext.innerHTML = 'Siguiente <i class="fa-solid fa-angle-right"></i>';
+        btnNext.disabled = (currentPage === total);
+        btnNext.onclick = () => { currentPage++; actualizarVista(); };
+        paginationContainer.appendChild(btnNext);
+
+        // --- BOTÓN ÚLTIMO ---
+        const btnLast = document.createElement('button');
+        btnLast.innerHTML = 'Último <i class="fa-solid fa-angles-right"></i>';
+        btnLast.disabled = (currentPage === total);
+        btnLast.onclick = () => { currentPage = total; actualizarVista(); };
+        paginationContainer.appendChild(btnLast);
+    };
+
+    // Función auxiliar para no repetir código
+    const actualizarVista = () => {
+        renderizarTabla();
+        renderizarPaginacion();
+        window.scrollTo(0, 0);
+    };
+
+        document.getElementById('btn-exportar').onclick = () => {
+            let csv = "ID,TITULO,ESTADOS,AÑO,LINK\n";
+            estudiosFiltrados.forEach(e => {
+                const edos = [...new Set(acuiferosData.filter(a => a.NORMALIZED_ID === e.NORMALIZED_ID).map(a => a.ESTADO))].join(' / ');
+                csv += `"${e.NORMALIZED_ID}","${(e.TITULO_ORIGINAL || "").replace(/"/g,'""')}","${edos}","${e.AÑO || ""}","${e.PDF || ""}"\n`;
+            });
+            const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "BiVAS_Export.csv";
+            link.click();
+        };
+
+     // --- EVENTOS DE LOS FILTROS ---
+
+        // Buscador por ID
+        filtroId.addEventListener('input', () => {
+            aplicarFiltrosYRenderizar();
+        });
+
+        // Filtro por Estado (y carga de acuíferos)
+        filtroEstado.onchange = () => {
+            const estadoSeleccionado = filtroEstado.value;
+            const acs = [...new Set(acuiferosData
+                .filter(a => a.ESTADO === estadoSeleccionado)
+                .map(a => a.ACUIFERO))]
+                .sort();
+
+            filtroAcuifero.innerHTML = '<option value="">-- Todos --</option>';
+            acs.forEach(ac => { 
+                const o = document.createElement('option'); 
+                o.value = ac; 
+                o.textContent = ac; 
+                filtroAcuifero.appendChild(o); 
+            });
+            
+            aplicarFiltrosYRenderizar();
+        };
+
+        // Otros filtros
+        filtroAcuifero.onchange = aplicarFiltrosYRenderizar;
+        filtroTexto.oninput = aplicarFiltrosYRenderizar;
+
+        // Botón Limpiar
+        document.getElementById('btn-limpiar-filtros').onclick = () => {
+            filtroId.value = '';
+            filtroEstado.value = '';
+            filtroAcuifero.innerHTML = '<option value="">-- Todos --</option>';
+            filtroTexto.value = '';
+            aplicarFiltrosYRenderizar();
+        };
+
+        // --- EXPORTACIÓN ---
+        document.getElementById('btn-exportar').onclick = () => {
+            let csv = "ID,TITULO,ESTADOS,AÑO,LINK\n";
+            estudiosFiltrados.forEach(e => {
+                const edos = [...new Set(acuiferosData.filter(a => a.NORMALIZED_ID === e.NORMALIZED_ID).map(a => a.ESTADO))].join(' / ');
+                csv += `"${e.NORMALIZED_ID}","${(e.TITULO_ORIGINAL || "").replace(/"/g,'""')}","${edos}","${e.AÑO || ""}","${e.PDF || ""}"\n`;
+            });
+            const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "BiVAS_Export.csv";
+            link.click();
+        };
+
+        // Arrancar la carga inicial
+        cargarDatos();
+    });
+</script>
+</body>
+</html>
