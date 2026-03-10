@@ -323,8 +323,8 @@
         const cargarDatos = async () => {
             try {
                 const [resEst, resAcu] = await Promise.all([
-                    fetch('T_ESTUDIOS_1.csv'),
-                    fetch('T_ACUIFEROS_ESTADOS_1.csv')
+                    fetch('T_ESTUDIOS.csv'),
+                    fetch('T_ACUIFEROS_ESTADOS.csv')
                 ]);
                 estudiosData = parseCSVRobust(await resEst.text());
                 acuiferosData = parseCSVRobust(await resAcu.text());
@@ -550,4 +550,5 @@
 </body>
 
 </html>
+
 
